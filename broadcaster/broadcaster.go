@@ -16,6 +16,8 @@ type Broadcaster[T any] struct {
 	queue     queue.Queue[T]
 	receivers []queue.Queue[T]
 
+	cancel chan struct{}
+
 	interLock *sync.RWMutex
 }
 
@@ -38,36 +40,41 @@ func (b *Broadcaster[T]) Send(value T) error {
 func (b *Broadcaster[T]) StartBroadcast() {
 	go func() {
 		for {
-			v, err := b.queue.Receive()
-			if err != nil {
+			select {
+			case <-b.cancel:
 				return
-			}
+			default:
+				v, err := b.queue.Receive()
+				if err != nil {
+					return
+				}
 
-			b.interLock.RLock()
-			for _, r := range b.receivers {
-				go func(r queue.Queue[T]) {
-					ch := make(chan error)
-					go func() {
-						defer func() {
-							if r := recover(); r != nil {
-								ch <- fmt.Errorf("broadcaster.StartBroadcast: %v", r)
-							}
-							close(ch)
+				b.interLock.RLock()
+				for _, r := range b.receivers {
+					go func(r queue.Queue[T]) {
+						ch := make(chan error)
+						go func() {
+							defer func() {
+								if r := recover(); r != nil {
+									ch <- fmt.Errorf("broadcaster.StartBroadcast: %v", r)
+								}
+								close(ch)
+							}()
+							ch <- r.Send(v)
 						}()
-						ch <- r.Send(v)
-					}()
-					after := time.After(5 * time.Second)
-					select {
-					case v := <-ch:
-						if v != nil {
-							log.Println("broadcaster.StartBroadcast: ", v)
+						after := time.After(5 * time.Second)
+						select {
+						case v := <-ch:
+							if v != nil {
+								log.Println("broadcaster.StartBroadcast: ", v)
+							}
+						case <-after:
+							log.Println("broadcaster.StartBroadcast: timeout")
 						}
-					case <-after:
-						log.Println("broadcaster.StartBroadcast: timeout")
-					}
-				}(r)
+					}(r)
+				}
+				b.interLock.RUnlock()
 			}
-			b.interLock.RUnlock()
 		}
 	}()
 }
@@ -156,4 +163,15 @@ func (b *Broadcaster[T]) RemoveReceiverByName(name string) {
 		b.receivers = newReceivers
 		receiver.Close()
 	}
+}
+
+func (b *Broadcaster[T]) Close() {
+	b.interLock.Lock()
+	defer b.interLock.Unlock()
+
+	b.queue.Close()
+	for _, r := range b.receivers {
+		r.Close()
+	}
+	b.cancel <- struct{}{}
 }
