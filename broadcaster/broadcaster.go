@@ -103,12 +103,28 @@ func (b *Broadcaster[T]) RemoveReceiver(receiver queue.Queue[T]) {
 	b.interLock.Lock()
 	defer b.interLock.Unlock()
 
-	i := sort.Search(len(b.receivers), func(i int) bool {
-		return b.receivers[i].Name() < receiver.Name()
+	i, found := sort.Find(len(b.receivers), func(i int) int {
+		s := b.receivers[i].Name()
+		t := receiver.Name()
+		if s < t {
+			return -1
+		}
+		if s > t {
+			return 1
+		}
+		return 0
 	})
 
+	if !found {
+		return
+	}
+
 	if i < len(b.receivers) && b.receivers[i].Name() == receiver.Name() {
-		b.receivers = append(b.receivers[:i], b.receivers[i+1:]...)
+		newReceivers := make([]queue.Queue[T], len(b.receivers)-1)
+		copy(newReceivers, b.receivers[:i])
+		copy(newReceivers[i:], b.receivers[i+1:])
+		b.receivers = newReceivers
+		receiver.Close()
 	}
 }
 
@@ -116,11 +132,28 @@ func (b *Broadcaster[T]) RemoveReceiverByName(name string) {
 	b.interLock.Lock()
 	defer b.interLock.Unlock()
 
-	i := sort.Search(len(b.receivers), func(i int) bool {
-		return b.receivers[i].Name() < name
+	i, found := sort.Find(len(b.receivers), func(i int) int {
+		s := b.receivers[i].Name()
+		t := name
+		if s < t {
+			return -1
+		}
+		if s > t {
+			return 1
+		}
+		return 0
 	})
 
+	if !found {
+		return
+	}
+
 	if i < len(b.receivers) && b.receivers[i].Name() == name {
-		b.receivers = append(b.receivers[:i], b.receivers[i+1:]...)
+		receiver := b.receivers[i]
+		newReceivers := make([]queue.Queue[T], len(b.receivers)-1)
+		copy(newReceivers, b.receivers[:i])
+		copy(newReceivers[i:], b.receivers[i+1:])
+		b.receivers = newReceivers
+		receiver.Close()
 	}
 }
