@@ -45,6 +45,7 @@ func (b *Broadcaster[T]) StartBroadcast() {
 
 			b.interLock.RLock()
 			for _, r := range b.receivers {
+				fmt.Println(r)
 				go func(r queue.Queue[T]) {
 					ch := make(chan error)
 					go func() {
@@ -94,6 +95,7 @@ func (b *Broadcaster[T]) AddReceiver(name string) queue.Queue[T] {
 	copy(newReceivers, b.receivers[:n])
 	newReceivers[n] = receiver
 	copy(newReceivers[n+1:], b.receivers[n:])
+	b.receivers = newReceivers
 
 	return receiver
 }
@@ -107,6 +109,19 @@ func (b *Broadcaster[T]) RemoveReceiver(receiver queue.Queue[T]) {
 	})
 
 	if i < len(b.receivers) && b.receivers[i].Name() == receiver.Name() {
+		b.receivers = append(b.receivers[:i], b.receivers[i+1:]...)
+	}
+}
+
+func (b *Broadcaster[T]) RemoveReceiverByName(name string) {
+	b.interLock.Lock()
+	defer b.interLock.Unlock()
+
+	i := sort.Search(len(b.receivers), func(i int) bool {
+		return b.receivers[i].Name() < name
+	})
+
+	if i < len(b.receivers) && b.receivers[i].Name() == name {
 		b.receivers = append(b.receivers[:i], b.receivers[i+1:]...)
 	}
 }
