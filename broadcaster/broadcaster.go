@@ -2,8 +2,10 @@ package broadcaster
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/snowmerak/hydro/queue"
 )
@@ -43,7 +45,27 @@ func (b *Broadcaster[T]) StartBroadcast() {
 
 			b.interLock.RLock()
 			for _, r := range b.receivers {
-				r.Send(v)
+				go func(r queue.Queue[T]) {
+					ch := make(chan error)
+					go func() {
+						defer func() {
+							if r := recover(); r != nil {
+								ch <- fmt.Errorf("broadcaster.StartBroadcast: %v", r)
+							}
+							close(ch)
+						}()
+						ch <- r.Send(v)
+					}()
+					after := time.After(5 * time.Second)
+					select {
+					case v := <-ch:
+						if v != nil {
+							log.Println("broadcaster.StartBroadcast: ", v)
+						}
+					case <-after:
+						log.Println("broadcaster.StartBroadcast: timeout")
+					}
+				}(r)
 			}
 			b.interLock.RUnlock()
 		}
