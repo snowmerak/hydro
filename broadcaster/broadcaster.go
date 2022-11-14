@@ -45,7 +45,6 @@ func (b *Broadcaster[T]) StartBroadcast() {
 
 			b.interLock.RLock()
 			for _, r := range b.receivers {
-				fmt.Println(r)
 				go func(r queue.Queue[T]) {
 					ch := make(chan error)
 					go func() {
