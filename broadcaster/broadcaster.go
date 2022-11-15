@@ -79,7 +79,7 @@ func (b *Broadcaster[T]) StartBroadcast() {
 	}()
 }
 
-func (b *Broadcaster[T]) AddReceiver(name string) queue.Receiver[T] {
+func (b *Broadcaster[T]) AddReceiver(name string) (queue.Receiver[T], bool) {
 	b.interLock.Lock()
 	defer b.interLock.Unlock()
 
@@ -91,19 +91,32 @@ func (b *Broadcaster[T]) AddReceiver(name string) queue.Receiver[T] {
 
 	if len(b.receivers) == 0 {
 		b.receivers = append(b.receivers, receiver)
-		return receiver
+		return receiver, true
 	}
 
-	n := sort.Search(len(b.receivers), func(i int) bool {
-		return b.receivers[i].Name() < name
+	n, found := sort.Find(len(b.receivers), func(i int) int {
+		target := b.receivers[i].Name()
+		if target < name {
+			return -1
+		}
+		if target > name {
+			return 1
+		}
+		return 0
 	})
+
+	if found {
+		receiver.Close()
+		return nil, false
+	}
+
 	newReceivers := make([]queue.Queue[T], len(b.receivers)+1)
 	copy(newReceivers, b.receivers[:n])
 	newReceivers[n] = receiver
 	copy(newReceivers[n+1:], b.receivers[n:])
 	b.receivers = newReceivers
 
-	return receiver
+	return receiver, true
 }
 
 func (b *Broadcaster[T]) RemoveReceiver(receiver queue.Receiver[T]) {

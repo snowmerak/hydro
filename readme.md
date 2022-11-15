@@ -13,6 +13,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/snowmerak/hydro/broadcaster"
 	"github.com/snowmerak/hydro/queue"
@@ -25,9 +26,13 @@ func main() {
 	})
 	bc.StartBroadcast()
 
-	a := bc.AddReceiver("A")
-	b := bc.AddReceiver("B")
-	c := bc.AddReceiver("C")
+	a, _ := bc.AddReceiver("A")
+	b, _ := bc.AddReceiver("B")
+	c, _ := bc.AddReceiver("C")
+	_, ok := bc.AddReceiver("A") // must be nil and false
+	if !ok {
+		log.Println("A is already exists")
+	}
 
 	bc.Send("Hello, World!")
 
@@ -44,10 +49,11 @@ func main() {
 	fmt.Println(b.Receive())
 	fmt.Println(c.Receive())
 }
+
 ```
 
 ```zsh
-➜  hydro git:(main) ✗ go run .                 
+2022/11/15 23:14:32 A is already exists
 Hello, World! <nil>
 Hello, World! <nil>
 Hello, World! <nil>
