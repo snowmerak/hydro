@@ -79,7 +79,7 @@ func (b *Broadcaster[T]) StartBroadcast() {
 	}()
 }
 
-func (b *Broadcaster[T]) AddReceiver(name string) queue.Queue[T] {
+func (b *Broadcaster[T]) AddReceiver(name string) queue.Receiver[T] {
 	b.interLock.Lock()
 	defer b.interLock.Unlock()
 
@@ -106,7 +106,7 @@ func (b *Broadcaster[T]) AddReceiver(name string) queue.Queue[T] {
 	return receiver
 }
 
-func (b *Broadcaster[T]) RemoveReceiver(receiver queue.Queue[T]) {
+func (b *Broadcaster[T]) RemoveReceiver(receiver queue.Receiver[T]) {
 	b.interLock.Lock()
 	defer b.interLock.Unlock()
 
@@ -127,11 +127,12 @@ func (b *Broadcaster[T]) RemoveReceiver(receiver queue.Queue[T]) {
 	}
 
 	if i < len(b.receivers) && b.receivers[i].Name() == receiver.Name() {
+		target := b.receivers[i]
 		newReceivers := make([]queue.Queue[T], len(b.receivers)-1)
 		copy(newReceivers, b.receivers[:i])
 		copy(newReceivers[i:], b.receivers[i+1:])
 		b.receivers = newReceivers
-		receiver.Close()
+		target.Close()
 	}
 }
 
