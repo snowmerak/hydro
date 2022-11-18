@@ -23,7 +23,7 @@ import (
 func main() {
 	bc := broadcaster.New(func(name string) queue.Queue[string] {
 		return ringbuffer.New[string](name, 256)
-	})
+	}, 126)
 	bc.StartBroadcast()
 
 	a, _ := bc.AddReceiver("A")
@@ -49,7 +49,6 @@ func main() {
 	fmt.Println(b.Receive())
 	fmt.Println(c.Receive())
 }
-
 ```
 
 ```zsh
