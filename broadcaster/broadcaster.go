@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snowmerak/hydro/gopool"
 	"github.com/snowmerak/hydro/queue"
 )
 
@@ -19,13 +20,16 @@ type Broadcaster[T any] struct {
 	cancel chan struct{}
 
 	interLock *sync.RWMutex
+
+	pool *gopool.GoPool
 }
 
-func New[T any](queueConstructor func(name string) queue.Queue[T]) *Broadcaster[T] {
+func New[T any](queueConstructor func(name string) queue.Queue[T], workerSize int) *Broadcaster[T] {
 	return &Broadcaster[T]{
 		queueConstructor: queueConstructor,
 		queue:            queueConstructor("main"),
 		interLock:        &sync.RWMutex{},
+		pool:             gopool.New(workerSize),
 	}
 }
 
@@ -51,26 +55,29 @@ func (b *Broadcaster[T]) StartBroadcast() {
 
 				b.interLock.RLock()
 				for _, r := range b.receivers {
-					go func(r queue.Queue[T]) {
-						ch := make(chan error)
-						go func() {
-							defer func() {
-								if r := recover(); r != nil {
-									ch <- fmt.Errorf("broadcaster.StartBroadcast: %v", r)
-								}
-								close(ch)
+					func(r queue.Queue[T]) {
+						b.pool.Go(func() {
+							ch := make(chan error)
+							go func() {
+								defer func() {
+									if r := recover(); r != nil {
+										ch <- fmt.Errorf("broadcaster.StartBroadcast: %v", r)
+									}
+									close(ch)
+								}()
+								ch <- r.Send(v)
 							}()
-							ch <- r.Send(v)
-						}()
-						after := time.After(5 * time.Second)
-						select {
-						case v := <-ch:
-							if v != nil {
-								log.Println("broadcaster.StartBroadcast: ", v)
+							after := time.After(5 * time.Second)
+							select {
+							case v := <-ch:
+								if v != nil {
+									log.Println("broadcaster.StartBroadcast: ", v)
+								}
+							case <-after:
+								log.Printf("broadcaster.StartBroadcast: %s was timeout\n", r.Name())
+								b.RemoveReceiver(r)
 							}
-						case <-after:
-							log.Println("broadcaster.StartBroadcast: timeout")
-						}
+						})
 					}(r)
 				}
 				b.interLock.RUnlock()
