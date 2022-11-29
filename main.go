@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/snowmerak/hydro/broadcaster"
 	"github.com/snowmerak/hydro/queue"
@@ -10,31 +13,43 @@ import (
 )
 
 func main() {
-	bc := broadcaster.New(func(name string) queue.Queue[string] {
-		return ringbuffer.New[string](name, 256)
-	}, 8)
+	const MAX = 100000
+
+	bc := broadcaster.New(func(name string) queue.Queue[int64] {
+		return ringbuffer.New[int64](name, 4096)
+	}, 1024)
 	bc.StartBroadcast()
 
-	a, _ := bc.AddReceiver("A")
-	b, _ := bc.AddReceiver("B")
-	c, _ := bc.AddReceiver("C")
-	_, ok := bc.AddReceiver("A") // must be nil and false
-	if !ok {
-		log.Println("A is already exists")
+	wg := new(sync.WaitGroup)
+	for i := 0; i < 128; i++ {
+		r, _ := bc.AddReceiver(strconv.FormatInt(int64(i), 10))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				v, err := r.Receive()
+				if err != nil {
+					log.Println(err)
+					return
+				}
+				if v == MAX {
+					return
+				}
+			}
+		}()
 	}
 
-	bc.Send("Hello, World!")
+	s := time.Now()
 
-	fmt.Println(a.Receive())
-	fmt.Println(b.Receive())
-	fmt.Println(c.Receive())
+	for i := 1; i <= MAX; i++ {
+		if err := bc.Send(int64(i)); err != nil {
+			log.Println(err)
+		}
+	}
 
-	bc.RemoveReceiver(b)
-	bc.RemoveReceiverByName("C")
+	wg.Wait()
 
-	bc.Send("Hello, World!")
+	e := time.Now()
 
-	fmt.Println(a.Receive())
-	fmt.Println(b.Receive())
-	fmt.Println(c.Receive())
+	fmt.Println(e.Sub(s))
 }
