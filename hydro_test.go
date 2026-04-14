@@ -206,3 +206,64 @@ func TestHydro_HighConcurrencyMultiProducer(t *testing.T) {
 		t.Fatalf("Total Count Mismatch: expected %d, actual %d", totalMsgs, len(received))
 	}
 }
+
+func BenchmarkHydro_SinglePublish(b *testing.B) {
+	h := New[int]()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		h.Publish(i)
+	}
+}
+
+func BenchmarkHydro_BatchPublish(b *testing.B) {
+	h := New[int]()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		h.Publish(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+	}
+}
+
+func BenchmarkHydro_PublishAndReceive(b *testing.B) {
+	h := New[int]()
+	sub := h.Subscribe()
+	b.ResetTimer()
+
+	go func() {
+		for i := 0; i < b.N; i++ {
+			h.Publish(i)
+		}
+	}()
+
+	for i := 0; i < b.N; i++ {
+		sub.Receive()
+	}
+}
+
+func BenchmarkHydro_MultiSubscriber(b *testing.B) {
+	h := New[int]()
+	numSubs := 10
+	var subs []*Subscriber[int]
+	for i := 0; i < numSubs; i++ {
+		subs = append(subs, h.Subscribe())
+	}
+	
+	b.ResetTimer()
+
+	go func() {
+		for i := 0; i < b.N; i++ {
+			h.Publish(i)
+		}
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(numSubs)
+	for i := 0; i < numSubs; i++ {
+		go func(s *Subscriber[int]) {
+			defer wg.Done()
+			for j := 0; j < b.N; j++ {
+				s.Receive()
+			}
+		}(subs[i])
+	}
+	wg.Wait()
+}
