@@ -46,3 +46,26 @@ Execute the testing suite via:
 ```sh
 go test -v ./...
 ```
+
+### Coverage
+The implementation holds **100.0%** statement coverage.
+
+```sh
+$ go test -cover .
+ok      github.com/snowmerak/hydro      0.612s  coverage: 100.0% of statements
+```
+
+## Performance
+
+Hydro is deeply optimized. The benchmarks (run on an AMD Ryzen 7 8845HS) demonstrate minimal allocations and microsecond-latency profiles across various loads:
+
+```
+goos: windows
+goarch: amd64
+pkg: github.com/snowmerak/hydro
+cpu: AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+BenchmarkHydro_SinglePublish-16         14356075                86.54 ns/op          168 B/op          3 allocs/op
+BenchmarkHydro_BatchPublish-16          11945670               109.0 ns/op           240 B/op          3 allocs/op
+BenchmarkHydro_PublishAndReceive-16      6976261               181.7 ns/op           168 B/op          3 allocs/op
+BenchmarkHydro_MultiSubscriber-16        5323629               223.9 ns/op           168 B/op          3 allocs/op
+```
